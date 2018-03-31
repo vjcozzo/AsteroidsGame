@@ -5,7 +5,6 @@
 #include <allegro5/allegro_native_dialog.h>
 #include <allegro5/allegro_primitives.h>
 #include <stdio.h>
-#include <time.h>
 #include <string>
 #include <vector>
 #include <random>
@@ -14,6 +13,8 @@
 class Game {
     protected:
         ALLEGRO_DISPLAY *disp;
+        ALLEGRO_TIMER *flash_timer;
+        ALLEGRO_TIMER *invuln_timer;
         ALLEGRO_BITMAP *bg;
         ALLEGRO_BITMAP *asteroid_layer;
         ALLEGRO_BITMAP *overlay;
@@ -24,8 +25,11 @@ class Game {
         std::vector<Asteroid *> *all_asteroids;
         std::vector<Bullet *> *shots;
         unsigned int health;
+        unsigned int score;
         int bullet_x_com, bullet_y_com;
-    
+        bool invincibility;
+        bool flash_active;
+        
         double cosine(double input) {
             double result = 1.0;
             double scalar = -1.0/2.0;
@@ -100,10 +104,11 @@ class Game {
             }
         }
         void update_overlay() {
-            std::stringstream health_display;
-            health_display << health;
+            std::stringstream display;
+            display << health;
 /*            int ind;*/
             al_set_target_bitmap(overlay);
+            al_clear_to_color(al_map_rgba(1, 1, 1, 1));
             al_draw_text(font_luxirb_med, al_map_rgb(250, 250, 250),
                 5, 5, ALLEGRO_ALIGN_LEFT, stock_options->at(0)->c_str());
 /*            for (ind = 0; ind < health; ind ++) {
@@ -112,7 +117,11 @@ class Game {
                 al_draw_bitmap();
             }*/
             al_draw_text(font_luxirb_med, al_map_rgb(250, 250, 250),
-                200, 5, ALLEGRO_ALIGN_LEFT, health_display.str().c_str());
+                200, 5, ALLEGRO_ALIGN_LEFT, display.str().c_str());
+            display.str("");
+            display << score;
+            al_draw_text(font_luxirb_med, al_map_rgb(250, 250, 250),
+                SCREEN_WIDTH-200, 5, ALLEGRO_ALIGN_RIGHT, display.str().c_str());
             al_draw_text(font_luxirb_med, al_map_rgb(250, 250, 190),
                 SCREEN_WIDTH-540, 5, ALLEGRO_ALIGN_LEFT, stock_options->at(1)->c_str());
             al_set_target_backbuffer(disp);
@@ -175,6 +184,8 @@ class Game {
             }
             all_asteroids = new std::vector<Asteroid *>();
             shots = new std::vector<Bullet *>();
+            health = 3;
+            invincibility = false;
         }
         Game() {
             disp = al_create_display(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -193,6 +204,8 @@ class Game {
             }
             all_asteroids = new std::vector<Asteroid *>();
             shots = new std::vector<Bullet *>();
+            health = 3;
+            invincibility = false;
         }
         
         ~Game() {
@@ -213,6 +226,8 @@ class Game {
         }
         
         int launch() {
+            flash_timer = al_create_timer(0.2);
+            invuln_timer = al_create_timer(2.0);
             int game_state = 1, result;
             bool redraw = false;
             ALLEGRO_TIMER *ticker_timer = NULL;
@@ -299,6 +314,8 @@ class Game {
         
             al_register_event_source(decisions_response_queue, al_get_display_event_source(disp));
             al_register_event_source(decisions_response_queue, al_get_timer_event_source(ticker_timer));
+            al_register_event_source(decisions_response_queue, al_get_timer_event_source(flash_timer));
+            al_register_event_source(decisions_response_queue, al_get_timer_event_source(invuln_timer));
             al_register_event_source(decisions_response_queue, al_get_timer_event_source(asteroid_spawn_timer));
             al_register_event_source(decisions_response_queue, al_get_keyboard_event_source());
             al_register_event_source(decisions_response_queue, al_get_mouse_event_source());
@@ -478,12 +495,13 @@ class Game {
                             }
                             spin = 0.08 + (double) (spin / 100.0);
                             ang = (double) (generator() % 6);
+                            stream.str("");
                             stream << "./res/asteroid" << (generator() % 6) << ".png";
                             printf("[    ] Data: pos (%f, %f); vel (%f, %f); angl (%f); omega %f\n", enter_x, enter_y, vi_x, vi_y, ang, spin);
+                            printf("%s\n", stream.str().c_str());
                             Asteroid *next_obj = new Asteroid(
                                 stream.str().c_str(), enter_x, enter_y,
                                 vi_x, vi_y, ang, spin, 2);
-                            printf("%s\n", stream.str().c_str());
                             stream.str("");
                             all_asteroids->push_back(next_obj);
                         } else if ((ev.keyboard.keycode == ALLEGRO_KEY_A) ||
@@ -643,6 +661,7 @@ class Game {
                                     }
                                 }
                                 ang = (double) (generator() % 6);
+                                stream.str("");
                                 stream << "./res/asteroid" << (generator() % 6) << ".png";
                                 spin = 0.08 + (double) (spin / 100.0);
                                 printf("[    ] Data: pos (%f, %f); vel (%f, %f); angl (%f); omega %f\n", enter_x, enter_y, vi_x, vi_y, ang, spin);
@@ -654,6 +673,13 @@ class Game {
                                 all_asteroids->push_back(next_obj);
                             }
 /*                            redraw = true;*/
+                        } else if (ev.timer.source == flash_timer) {
+                            flash_active = !flash_active;
+                        } else if (ev.timer.source == invuln_timer) {
+                            invincibility = false;
+                            flash_active = false;
+                            al_stop_timer(invuln_timer);
+                            al_stop_timer(flash_timer);
                         } else {
                             
                         }
@@ -718,6 +744,22 @@ class Game {
                         al_set_target_backbuffer(disp);
                         al_draw_bitmap(asteroid_layer, 0, 0, 0);
                         
+                        unsigned char r, g, b/*, a*/;
+                        ALLEGRO_COLOR player_loc_col = al_get_pixel(asteroid_layer, pos_x, pos_y);
+                        al_unmap_rgb(player_loc_col, &r, &g, &b/*, a*/);
+                        if ((r == 128) && (g == 128) && (b == 128) && !(invincibility)) { /* cgp GREY */
+                            /* */
+                            if (health > 0) {
+                                health --;
+                                invincibility = true;
+                                flash_active = true;
+                                al_start_timer(flash_timer);
+                                al_start_timer(invuln_timer);
+                            } else {
+                                game_state = -1;
+                            }
+                        }
+                        
                         /* Iterate through projectiles, to DRAW them */
                         upper_bound = shots->size();
                         for (ind=0; ind < upper_bound; ind ++) {
@@ -732,13 +774,12 @@ class Game {
                                  * the Asteroid object into more asteroids) but
                                  * the important point is to 
                                  * delete & erase the shot object! */
-                                unsigned char r, g, b/*, a*/;
                                 ALLEGRO_COLOR asteroid_color = al_get_pixel(asteroid_layer, x_px, y_px);
                                 al_unmap_rgb(asteroid_color, &r, &g, &b/*, a*/);
                                 if ((r == 128) && (g == 128) && (b == 128)) { /* cgp GREY */
                                     /* Collision detected! */
                                     int match_num = find_asteroid_overlap(x_px, y_px);
-                                    if (ind >= 0) {
+                                    if (match_num >= 0) {
                                         Asteroid *match = all_asteroids->at(match_num);
 /*                                        match->break_up();*/
                                         /* TODO condition on the size of the broken asteroid
@@ -773,6 +814,10 @@ class Game {
                                         shots->erase(shots->begin()+ind);
                                         ind --;
                                         upper_bound --;
+
+                                        /* Update score & threshold */
+                                        threshold ++;
+                                        score += 1000 / (match->get_size()+2);
                                     }
                                 }
                             } else {
@@ -782,14 +827,17 @@ class Game {
                                 ind--;
                             }
                         }
-                        al_draw_scaled_rotated_bitmap(space_ship_img, space_ship_wid/2, space_ship_hgt/2,
-                            ((int)pos_x), ((int)pos_y), 0.8, 0.8, ship_angle, 0);
+                        if (! flash_active) {
+                            al_draw_scaled_rotated_bitmap(space_ship_img, space_ship_wid/2, space_ship_hgt/2,
+                                ((int)pos_x), ((int)pos_y), 0.8, 0.8, ship_angle, 0);
+                        }
                         /* TODO have a hit box for the player spaceship...
                          * then when it gets hit, process that by
                          * decrementing health (if zero, then change game_state; if not,
                          * then activate an immunity timer for 1.5 seconds... bonus points
-                         * for having the player space ship flashing?) */
+                         * for having the player space ship flash_timering?) */
                         /* 3: draw overlay with player stats */
+                        update_overlay();
                         al_draw_bitmap(overlay, 0, 0, 0);
                         al_flip_display();
                     }
@@ -804,6 +852,8 @@ class Game {
             al_destroy_bitmap(bullet_img);
             al_destroy_bitmap(space_ship_img);
             al_destroy_bitmap(star);
+            al_destroy_timer(flash_timer);
+            al_destroy_timer(invuln_timer);
             al_destroy_font(font_amok);
             al_destroy_font(font_luxirb);
             al_destroy_font(font_luxirb_small);
@@ -812,7 +862,7 @@ class Game {
         }
 };
 
-int main(int argc, char **argv) {
+int main(/*int argc, char **argv*/) {
     ALLEGRO_DISPLAY *display = NULL;
     int result;
 /*    int visual_type = 0;*/

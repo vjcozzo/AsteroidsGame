@@ -170,11 +170,11 @@ class Asteroid {
     }
 
     int get_width() {
-      return size*com_x;
+      return /*size**/com_x;
     }
 
     int get_height() {
-      return size*com_y;
+      return /*size**/com_y;
     }
 
     int get_size() {
