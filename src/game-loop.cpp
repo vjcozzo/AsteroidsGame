@@ -185,7 +185,9 @@ class Game {
             all_asteroids = new std::vector<Asteroid *>();
             shots = new std::vector<Bullet *>();
             health = 3;
+            score = 0;
             invincibility = false;
+            flash_active = false;
         }
         Game() {
             disp = al_create_display(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -205,7 +207,9 @@ class Game {
             all_asteroids = new std::vector<Asteroid *>();
             shots = new std::vector<Bullet *>();
             health = 3;
+            score = 0;
             invincibility = false;
+            flash_active = false;
         }
         
         ~Game() {
