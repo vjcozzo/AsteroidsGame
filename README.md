@@ -1,7 +1,7 @@
 # AsteroidsGame
 A free-software implementation of the old arcade game, Asteroids. This project was originally developed for a Game Jam in March 2018. This implementation uses the Allegro 5 game libraries.
 
-## Technical note 
-Static linking does not work on my machine any more. So cloning this repository may not guarantee that the game runs on your machine. This README will be updated when static linking problems are fixed; this should make the game more portable to different Linux distributions. 
-UPDATE 2018-08-31: Static linking now works! The ELF binaries have been added under ./bin 
+## Technical notes
+*    ELF binaries have been added under ./bin 
+*    Sometimes, especially on older distributions, the binaries alone are not sufficient to play the game. For these distros, you may need to use the directory for-static-release-dynamic-libs/, which contains dynamic libraries needed on older distributions.
 
